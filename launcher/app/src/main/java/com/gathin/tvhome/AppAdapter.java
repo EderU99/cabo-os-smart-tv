@@ -333,7 +333,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
         if (banner == null) banner = ri.activityInfo.loadBanner(pm);
         // A square "banner" counts as none: the tile shows the app's icon and name instead of a blur.
-        return banner != null && isBannerShaped(banner.getIntrinsicWidth(), banner.getIntrinsicHeight()) ? banner : null;
+        if (banner != null && isBannerShaped(banner.getIntrinsicWidth(), banner.getIntrinsicHeight())) {
+            return GlassBanner.apply(ctx, banner, ri.activityInfo.packageName);
+        }
+        return null;
     }
 
     /**
@@ -410,7 +413,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         h.card.setFocusable(true);
         h.name.setText(e.name);
         // The dock has no labels, unless always_show_names asks for them (DockDecoration then makes room in the band).
-        h.name.setVisibility(dockRow && position < dockSize && restNameAlpha == 0f ? View.INVISIBLE : View.VISIBLE);
+        h.name.setVisibility(View.VISIBLE);
         boolean focused = h.card.isFocused();   // a rebind after reload() can hit the focused tile
         h.name.setAlpha(focused ? 1f : restNameAlpha);
         h.card.setScaleX(focused && animations ? focusScale() : 1f);
@@ -468,7 +471,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
         try {
             ctx.startActivity(i);
-            if (cinematic) LastOpened.record(ctx, e.pkg);
+            LastOpened.record(ctx, e.pkg); ContinueWatchingStore.recordAppOpened(ctx, e.pkg, e.label);
             if (advancedEffects && ctx instanceof Activity) {
                 ((Activity) ctx).overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
             }

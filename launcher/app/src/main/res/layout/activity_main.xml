@@ -266,13 +266,87 @@
                             android:format12Hour="@string/date_format_home"
                             android:format24Hour="@string/date_format_home"
                             android:textColor="#A6FFFFFF"
-                            android:textSize="14sp"
+                            android:textSize="13sp"
                             android:fontFamily="@font/outfit_regular"
-                            android:letterSpacing="0.14"
+                            android:letterSpacing="0.08"
                             android:textAllCaps="true" />
                     </LinearLayout>
                 </LinearLayout>
 
+            </LinearLayout>
+
+            <!-- Frosted glass weather pill below the clock & date. -->
+            <LinearLayout
+                android:id="@+id/weatherPill"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/leftBlock"
+                android:layout_alignStart="@id/leftBlock"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/weather_pill_bg"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingEnd="18dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:focusable="false"
+                android:importantForAccessibility="no">
+
+                <com.gathin.tvhome.WeatherIconView
+                    android:id="@+id/weatherIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp" />
+
+                <TextView
+                    android:id="@+id/weatherTemp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:singleLine="true"
+                    android:textColor="#FAFFFFFF"
+                    android:textSize="19sp"
+                    android:fontFamily="@font/outfit_light"
+                    android:includeFontPadding="false"
+                    android:text="27°C" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="22dp"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="#40FFFFFF" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/weatherCondition"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:singleLine="true"
+                        android:textColor="#EBFFFFFF"
+                        android:textSize="11sp"
+                        android:fontFamily="@font/outfit_medium"
+                        android:letterSpacing="0.05"
+                        android:includeFontPadding="false"
+                        android:text="DESPEJADO  ·  MONTERREY" />
+
+                    <TextView
+                        android:id="@+id/weatherDetails"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:singleLine="true"
+                        android:textColor="#A8FFFFFF"
+                        android:textSize="9.5sp"
+                        android:fontFamily="@font/outfit_regular"
+                        android:letterSpacing="0.03"
+                        android:includeFontPadding="false"
+                        android:text="MÁX 27°C   ·   MÍN 17°C   ·   HUMEDAD 53%" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- Shown only when show_stats is on. Outside leftBlock, so the top buttons stay level with the clock
@@ -280,7 +354,7 @@
             <TextView
                 android:id="@+id/stats"
                 android:layout_width="wrap_content"
-                android:layout_below="@id/leftBlock"
+                android:layout_below="@id/weatherPill"
                 android:layout_alignStart="@id/leftBlock"
                 android:gravity="left"
                 android:layout_height="wrap_content"
@@ -366,6 +440,105 @@
                 android:descendantFocusability="afterDescendants" />
         </FrameLayout>
     </LinearLayout>
+
+    <!-- "Continuar viendo" horizontal row of 4 frosted-glass panoramic cards above the dock. -->
+    <LinearLayout
+        android:id="@+id/continueWatchingBlock"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="68dp"
+        android:paddingEnd="68dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:visibility="invisible"
+        android:alpha="0">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="4dp"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▶"
+                android:textColor="#FFFF4B55"
+                android:textSize="11sp"
+                android:layout_marginEnd="7dp"
+                android:includeFontPadding="false" />
+
+            <TextView
+                android:id="@+id/continueWatchingHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CONTINUAR VIENDO"
+                android:textColor="#E6FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="@font/outfit_medium"
+                android:letterSpacing="0.18"
+                android:includeFontPadding="false"
+                android:singleLine="true" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/continueWatchingRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <com.gathin.tvhome.ContinueWatchingCardView
+                android:id="@+id/cwCard0"
+                android:layout_width="0dp"
+                android:layout_height="112dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="7dp" />
+
+            <com.gathin.tvhome.ContinueWatchingCardView
+                android:id="@+id/cwCard1"
+                android:layout_width="0dp"
+                android:layout_height="112dp"
+                android:layout_weight="1"
+                android:layout_marginStart="7dp"
+                android:layout_marginEnd="7dp" />
+
+            <com.gathin.tvhome.ContinueWatchingCardView
+                android:id="@+id/cwCard2"
+                android:layout_width="0dp"
+                android:layout_height="112dp"
+                android:layout_weight="1"
+                android:layout_marginStart="7dp"
+                android:layout_marginEnd="7dp" />
+
+            <com.gathin.tvhome.ContinueWatchingCardView
+                android:id="@+id/cwCard3"
+                android:layout_width="0dp"
+                android:layout_height="112dp"
+                android:layout_weight="1"
+                android:layout_marginStart="7dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 3D Rotary Knob & Emerald Neon Tube Volume Medallion (Model 7C). -->
+    <View
+        android:id="@+id/volumeMedallion"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        android:importantForAccessibility="no" />
+
+    <!-- Full-screen CaboOS boot splash shown once when the TV boots up. -->
+    <com.gathin.tvhome.CaboBootSplashView
+        android:id="@+id/caboSplash"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:elevation="24dp"
+        android:importantForAccessibility="no" />
 
     <!-- The single floating glass highlight that springs between tiles. -->
     <com.gathin.tvhome.GlassView

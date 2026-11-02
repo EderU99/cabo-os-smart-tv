@@ -143,6 +143,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean advancedEffects;
     private TextView greeting;
     private View clockBlock;
+    private View weatherPill;
+    private WeatherUpdater weatherUpdater;
+    private View continueWatchingBlock;
+    private ContinueWatchingCardView[] cwCards;
+    private int cwCount;
+    private float lastDockTopInRoot;
     private View btnInputs;
     private TextView btnWifi;
     /** The network pill's icon as last set, so a refresh that changes nothing does not lay the top bar out again. */
@@ -161,6 +167,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private String greetingName = "";
     /** Optional time-of-day backdrop (config.xml, sky_intensity); 0 keeps it hidden. */
     private SkyView sky;
+
+    private CaboBootSplashView caboSplash;
+    private boolean screenWasOff = false;
+    private final BroadcastReceiver screenWakeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                screenWasOff = true;
+            } else if (Intent.ACTION_SCREEN_ON.equals(intent.getAction()) && screenWasOff) {
+                screenWasOff = false;
+                if (caboSplash != null) caboSplash.replay();
+            }
+        }
+    };
     private String vpnApp;
     private SpringAnimation springX, springY;
     private float glassTargetX, glassTargetY;
@@ -280,6 +300,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     };
     // Right after boot the clock is often wrong until network time arrives; don't wait a minute to catch up.
     private final IntentFilter timeFilter = new IntentFilter(Intent.ACTION_TIME_CHANGED);
+    private final IntentFilter volumeFilter = new IntentFilter("android.media.VOLUME_CHANGED_ACTION");
+    private final BroadcastReceiver volumeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (isInitialStickyBroadcast()) return;
+            if (false) {
+                android.media.AudioManager am = (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+
+            }
+        }
+    };
     private final BroadcastReceiver timeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -292,6 +323,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             updateGreeting();
             updateRace();
             updateWifiLabel();
+            if (weatherUpdater != null) weatherUpdater.updateIfNeeded();
+        refreshContinueWatching();
             sky.update();
             wallpaperPlayer.update();
             handler.postDelayed(this, MINUTE_MS);
@@ -329,6 +362,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         getWindow().setBackgroundDrawable(null);
         wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
         sky = findViewById(R.id.sky);
+        caboSplash = findViewById(R.id.caboSplash);
+        IntentFilter wakeFilter = new IntentFilter();
+        wakeFilter.addAction(Intent.ACTION_SCREEN_OFF);
+        wakeFilter.addAction(Intent.ACTION_SCREEN_ON);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenWakeReceiver, wakeFilter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(screenWakeReceiver, wakeFilter);
+        }
         sky.setIntensity(cfg.skyIntensity);
         glass = findViewById(R.id.glass);
         if (festive) glass.setAccent(festival.accentColor());
@@ -351,8 +393,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // dock_title false: the name above the dock (and the cinematic lines under it) never shows; the glow
         // still follows the dock.
         if (!cfg.dockTitle) hero.setVisibility(View.GONE);
+        initContinueWatching();
         greeting = findViewById(R.id.greeting);
         clockBlock = findViewById(R.id.leftBlock);
+        weatherPill = findViewById(R.id.weatherPill);
+        weatherUpdater = new WeatherUpdater(
+                this,
+                weatherPill,
+                findViewById(R.id.weatherIcon),
+                findViewById(R.id.weatherTemp),
+                findViewById(R.id.weatherCondition),
+                findViewById(R.id.weatherDetails)
+        );
         greetingColor = greeting.getCurrentTextColor();
         btnWifi = findViewById(R.id.btnWifi);
         shamsiDate = findViewById(R.id.shamsiDate);
@@ -547,6 +599,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return true;
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 // Back to the dock tile Up came from, not wherever the focus finder lands.
+                if (!reordering && cwCount > 0 && continueWatchingBlock != null && continueWatchingBlock.getVisibility() == View.VISIBLE) { focusContinueWatching(lastFocused % COLUMNS); return true; }
                 focusTile(lastFocused % COLUMNS);
                 return true;
             }
@@ -633,9 +686,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(packageReceiver, packageFilter, Context.RECEIVER_NOT_EXPORTED);
             registerReceiver(timeReceiver, timeFilter, Context.RECEIVER_NOT_EXPORTED);
+
         } else {
             registerReceiver(packageReceiver, packageFilter);
             registerReceiver(timeReceiver, timeFilter);
+
         }
         updateClockVisibility();
     }
@@ -658,6 +713,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         rebuildOnResume = false;
         updateGreeting();
         updateRace();
+        if (weatherUpdater != null) weatherUpdater.updateIfNeeded();
+        refreshContinueWatching();
         // The network and Inputs pills keep their state while Home is in the background, and callbacks update them
         // when the network or the inputs change, so this refresh only catches anything missed. Its binder calls
         // (about 7 ms on a TCL C755, most of it WifiManager.getConnectionInfo) would hold up the first frame back
@@ -807,6 +864,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         started = false;
         unregisterReceiver(packageReceiver);
         unregisterReceiver(timeReceiver);
+
         handler.removeCallbacks(clockCheck);
         stopped = true;
         rebuildOnResume = true;
@@ -848,6 +906,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onDestroy() {
         super.onDestroy();
         wallpaperPlayer.close();
+        try { unregisterReceiver(screenWakeReceiver); } catch (Exception ignored) {}
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.unregisterCallback(inputCallback);
@@ -890,6 +949,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (handleSettingsKey(event)) return true;
+
         if (!reordering) return super.dispatchKeyEvent(event);
         if (dockEditing) return dispatchDockEdit(event);
         boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
@@ -954,6 +1014,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         orderAtStart = adapter.movableKeys();
         glass.setAccent(REORDER_ACCENT);
         btnReorder.setActivated(true);
+        hideContinueWatching();
         return true;
     }
 
@@ -1063,6 +1124,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         adapter.setReordering(false);
         glass.setAccent(festive ? festival.accentColor() : 0);
         btnReorder.setActivated(false);
+        if (lastFocused < COLUMNS && lastDockTopInRoot > 0) showContinueWatchingAt(lastDockTopInRoot);
         List<String> keys = adapter.movableKeys();
         List<String> before = orderAtStart;
         orderAtStart = null;
@@ -1267,6 +1329,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private void showHero(int position, float dockTopInRoot) {
         String label = adapter.labelAt(position);
+        lastDockTopInRoot = dockTopInRoot;
+        showContinueWatchingAt(dockTopInRoot);
         int color = adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
         boolean changed = !label.contentEquals(heroName.getText());
@@ -1521,6 +1585,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     private void showGlowOnly(int position) {
         int color = adapter.ambientColorAt(position);
+        hideContinueWatching();
         stopAmbientAnimation();
         hero.animate().cancel();
         ambient.animate().cancel();
@@ -1569,6 +1634,166 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         glass.animate().cancel();
         if (animations) glass.animate().alpha(0f).setDuration(160).start();
         else glass.setAlpha(0f);
+    }
+
+    // ---- continue watching row --------------------------------------------------------------------
+
+    private void initContinueWatching() {
+        continueWatchingBlock = findViewById(R.id.continueWatchingBlock);
+        if (continueWatchingBlock == null) return;
+        // Hide the big floating dock title so the Continue Watching row occupies the space above the dock cleanly.
+        hero.setVisibility(View.GONE);
+        cwCards = new ContinueWatchingCardView[]{
+                findViewById(R.id.cwCard0),
+                findViewById(R.id.cwCard1),
+                findViewById(R.id.cwCard2),
+                findViewById(R.id.cwCard3)
+        };
+        for (int i = 0; i < cwCards.length; i++) {
+            final int idx = i;
+            final ContinueWatchingCardView card = cwCards[i];
+            if (card == null) continue;
+            card.setOnClickListener(v -> {
+                ContinueWatchingStore.Item it = card.getItem();
+                if (it != null) {
+                    ContinueWatchingStore.launchItem(this, it);
+                    if (advancedEffects) {
+                        overridePendingTransition(R.anim.app_open_enter, R.anim.app_open_exit);
+                    }
+                }
+            });
+            card.setOnLongClickListener(v -> {
+                ContinueWatchingStore.Item it = card.getItem();
+                if (it != null) {
+                    ContinueWatchingStore.removeItem(this, it.pkg);
+                    refreshContinueWatching();
+                    Toast.makeText(this, "Actualizado en Continuar viendo", Toast.LENGTH_SHORT).show();
+                }
+                return true;
+            });
+            card.setOnKeyListener((v, keyCode, event) -> {
+                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                    if (idx > 0 && cwCards[idx - 1] != null) {
+                        cwCards[idx - 1].requestFocus();
+                        v.playSoundEffect(SoundEffectConstants.NAVIGATION_LEFT);
+                        if (ambientGlow && cwCards[idx - 1].getItem() != null) {
+                            setAmbient(cwCards[idx - 1].getItem().accentColor);
+                        }
+                    }
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    if (idx + 1 < cwCount && cwCards[idx + 1] != null) {
+                        cwCards[idx + 1].requestFocus();
+                        v.playSoundEffect(SoundEffectConstants.NAVIGATION_RIGHT);
+                        if (ambientGlow && cwCards[idx + 1].getItem() != null) {
+                            setAmbient(cwCards[idx + 1].getItem().accentColor);
+                        }
+                    }
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    int targetTile = Math.min(idx, Math.max(0, adapter.dockFilled() - 1));
+                    focusTile(targetTile);
+                    v.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    View topBtn = btnInputs.getVisibility() == View.VISIBLE ? btnInputs : firstTopButton();
+                    if (topBtn != null) topBtn.requestFocus();
+                    v.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+                    return true;
+                }
+                return false;
+            });
+        }
+        continueWatchingBlock.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (lastDockTopInRoot > 0 && (b - t) != (ob - ot)) {
+                positionContinueWatching(lastDockTopInRoot);
+            }
+        });
+        ContinueWatchingStore.setChangeListener(() -> runOnUiThread(this::refreshContinueWatching));
+        refreshContinueWatching();
+    }
+
+    private void refreshContinueWatching() {
+        if (continueWatchingBlock == null || cwCards == null) return;
+        List<ContinueWatchingStore.Item> items = ContinueWatchingStore.loadItems(this);
+        cwCount = Math.min(items.size(), cwCards.length);
+        for (int i = 0; i < cwCards.length; i++) {
+            ContinueWatchingCardView card = cwCards[i];
+            if (card == null) continue;
+            if (i < cwCount) {
+                ContinueWatchingStore.Item it = items.get(i);
+                Bitmap art = ContinueWatchingStore.loadArtworkBitmap(it);
+                Drawable backdrop = art == null ? ContinueWatchingStore.loadAppBackdrop(this, it.pkg) : null;
+                card.bind(it, art, backdrop);
+                card.setVisibility(View.VISIBLE);
+                card.setFocusable(true);
+            } else {
+                card.setVisibility(View.INVISIBLE);
+                card.setFocusable(false);
+            }
+        }
+        if (cwCount == 0) {
+            continueWatchingBlock.setVisibility(View.GONE);
+        } else if (lastDockTopInRoot > 0 && lastFocused < COLUMNS && !reordering) {
+            showContinueWatchingAt(lastDockTopInRoot);
+        }
+    }
+
+    private void positionContinueWatching(float dockTopInRoot) {
+        if (continueWatchingBlock == null) return;
+        int h = continueWatchingBlock.getHeight();
+        if (h <= 0) h = Math.round(140f * density);
+        float minTop = 148f * density;
+        float desiredY = dockTopInRoot - 16f * density - h;
+        continueWatchingBlock.setY(Math.max(minTop, desiredY));
+    }
+
+    private void showContinueWatchingAt(float dockTopInRoot) {
+        if (continueWatchingBlock == null || cwCount <= 0 || reordering) return;
+        positionContinueWatching(dockTopInRoot);
+        if (continueWatchingBlock.getVisibility() != View.VISIBLE || continueWatchingBlock.getAlpha() < 0.99f) {
+            continueWatchingBlock.animate().cancel();
+            continueWatchingBlock.setVisibility(View.VISIBLE);
+            if (animations && !reducedMotion) {
+                continueWatchingBlock.animate().alpha(1f).setDuration(220).start();
+            } else {
+                continueWatchingBlock.setAlpha(1f);
+            }
+        }
+    }
+
+    private void hideContinueWatching() {
+        if (continueWatchingBlock == null || continueWatchingBlock.getVisibility() != View.VISIBLE) return;
+        continueWatchingBlock.animate().cancel();
+        if (animations && !reducedMotion) {
+            continueWatchingBlock.animate().alpha(0f).setDuration(150).withEndAction(() -> {
+                if (continueWatchingBlock.getAlpha() < 0.05f) {
+                    continueWatchingBlock.setVisibility(View.INVISIBLE);
+                }
+            }).start();
+        } else {
+            continueWatchingBlock.setAlpha(0f);
+            continueWatchingBlock.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    private void focusContinueWatching(int preferredSlot) {
+        if (continueWatchingBlock == null || cwCount <= 0) return;
+        int idx = Math.max(0, Math.min(preferredSlot, cwCount - 1));
+        if (lastDockTopInRoot > 0) positionContinueWatching(lastDockTopInRoot);
+        continueWatchingBlock.animate().cancel();
+        continueWatchingBlock.setVisibility(View.VISIBLE);
+        continueWatchingBlock.setAlpha(1f);
+        if (cwCards[idx] != null) {
+            cwCards[idx].requestFocus();
+            if (ambientGlow && cwCards[idx].getItem() != null) {
+                setAmbient(cwCards[idx].getItem().accentColor);
+            }
+        }
     }
 
     // ---- optional system stats (config.xml show_stats) --------------------------------------------
@@ -1772,7 +1997,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT);
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
+            if (position < COLUMNS) { if (!reordering && cwCount > 0 && continueWatchingBlock != null) { focusContinueWatching(position); grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP); return true; } return false; }
             target = position - COLUMNS;
         } else {
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
@@ -1904,6 +2129,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void updateClockVisibility() {
         boolean valid = System.currentTimeMillis() >= TIME_VALID_AFTER_MS;
         clockBlock.setVisibility(valid ? View.VISIBLE : View.INVISIBLE);
+        if (weatherPill != null) weatherPill.setVisibility(valid ? View.VISIBLE : View.INVISIBLE);
         handler.removeCallbacks(clockCheck);
         if (valid) {
             updateGreeting();

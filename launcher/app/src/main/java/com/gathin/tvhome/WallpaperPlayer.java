@@ -35,6 +35,7 @@ final class WallpaperPlayer {
     private boolean active;
     private boolean closed;
     private boolean loading;
+    private boolean firstStart = true;
     private String displayed = "";
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
@@ -98,6 +99,20 @@ final class WallpaperPlayer {
     }
 
     void start() {
+        if (firstStart) {
+            firstStart = false;
+        } else if (files.size() > 1) {
+            preferences.edit().putLong("changed", 0L).apply();
+        }
+        SeasonalWallpapers.syncPixabayAsync(root.getContext(), java.time.LocalDate.now(), updated -> {
+            if (closed || updated == null || updated.isEmpty()) return;
+            files.clear();
+            files.addAll(updated);
+            preferences.edit().putLong("changed", 0L).apply();
+            update();
+        });
+        if (false) {
+        }
         active = true;
         update();
     }

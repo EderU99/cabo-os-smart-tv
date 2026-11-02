@@ -305,8 +305,8 @@ final class Config {
         // A theme can also switch the wallpaper off while the file is still there.
         boolean wallpaperEnabled = json == null || bool(json, "wallpaper", true);
         if (!wallpaperEnabled) wallpaper = null;
-        int rotationMinutes = json == null ? 0 : integer(json, "wallpaper_rotation_minutes", 0, 0, 1440);
-        int wallpaperDim = json == null ? 0 : integer(json, "wallpaper_dim", 0, 0, 90);
+        int rotationMinutes = json == null ? 5 : integer(json, "wallpaper_rotation_minutes", 5, 0, 1440);
+        int wallpaperDim = json == null ? 32 : integer(json, "wallpaper_dim", 32, 0, 90);
         String wallpaperOrder = json == null ? WallpaperRotation.ORDER_SHUFFLE
                 : string(json, "wallpaper_order", WallpaperRotation.ORDER_SHUFFLE);
         // An unknown order must not silently change how an existing collection rotates.
@@ -316,6 +316,12 @@ final class Config {
             wallpapers.addAll(WallpaperRotation.images(new File(dir, "wallpapers")));
         }
         if (wallpapers.isEmpty() && wallpaper != null) wallpapers.add(wallpaper);
+        if (wallpapers.isEmpty() && wallpaperEnabled) {
+            wallpapers.addAll(SeasonalWallpapers.loadForToday(ctx, java.time.LocalDate.now()));
+            if (!wallpapers.isEmpty() && wallpaper == null) {
+                wallpaper = wallpapers.get(0);
+            }
+        }
         // An on-TV wallpaper pick overrides the theme: a filename from the wallpapers/
         // collection, or "none". Unset means the theme decides (off by default).
         String wallpaperChoice = choices.getString(WALLPAPER_CHOICE_KEY, null);
@@ -338,6 +344,9 @@ final class Config {
         // A festive skin comes only from a theme; config.xml has no festival.
         Festival festival = json == null ? Festival.NONE : Festival.parse(string(json, "festival", ""),
                 string(json, "festival_until", ""), string(json, "greeting", ""), string(json, "accent_color", ""));
+        if (festival == Festival.NONE) {
+            festival = SeasonalWallpapers.seasonalFestival(java.time.LocalDate.now());
+        }
 
         return new Config(dock, fillDock, hidden, liveTv, liveTvAction, packageMap(launchActions), packageMap(appLabels),
                 packageMap(appBanners), panelService,

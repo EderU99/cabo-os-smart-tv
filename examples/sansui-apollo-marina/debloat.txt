@@ -1,0 +1,33 @@
+# Sansui Apollo Premium4K TV (Expressluck, device marina, MediaTek m7332)
+# Android TV 14 (SDK 34), firmware UKNV.260528.001
+# Stock launcher: com.google.android.apps.tv.launcherx
+#
+# Apply:   powershell -ExecutionPolicy Bypass -File tools\disable.ps1 -TvHost 192.168.100.22 examples\sansui-apollo-marina\debloat.txt
+# Undo:    powershell -ExecutionPolicy Bypass -File tools\restore.ps1 -TvHost 192.168.100.22 examples\sansui-apollo-marina\debloat.txt com.google.android.apps.tv.launcherx
+# Everything is DISABLED, not uninstalled.
+
+# Telemetry and ad services
+tv.anoki.acr.anokiacroptin                  # automatic content recognition
+com.android.adservices.api
+com.android.ondevicepersonalization.services
+com.android.federatedcompute.services
+com.google.android.feedback
+com.android.tv.feedbackconsent
+com.google.android.partnersetup
+
+# Content rows and partner junk
+com.mediatek.android.leanbacklauncher.partnercustomizer
+com.google.android.syncadapters.calendar
+
+# Preloaded apps and demos
+com.google.android.play.games
+fusion.android.tv.demo                      # retail demo mode
+com.mediatek.androidbox                     # WFDSinkTest, Wi-Fi Display test app
+com.google.android.youtube.tvmusic
+com.google.android.apps.tv.dreamx           # Google screensaver; the new launcher has a Clock screensaver
+com.google.android.videos                   # Google TV Movies & TV
+com.univision.prendetv                      # PrendeTV (Univision)
+
+# Stock launcher and its first-run wizard.
+com.google.android.tungsten.setupwraith     # its RecoveryActivity otherwise takes over Home
+com.google.android.apps.tv.launcherx
